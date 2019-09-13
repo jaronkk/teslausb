@@ -3,6 +3,7 @@
 log "Moving clips to archive..."
 
 NUM_FILES_MOVED=0
+NUM_FILES_SKIPPED=0
 NUM_FILES_FAILED=0
 NUM_FILES_DELETED=0
 
@@ -39,7 +40,7 @@ function moveclips() {
   while read file_name
   do
     size=$(stat -c%s "$ROOT/$file_name")
-    outdir=$(dirname "$filename")
+    outdir=$(dirname "$file_name")
     archive_directory="$ARCHIVE_MOUNT/$outdir"
     archive_file_name="$ARCHIVE_MOUNT/$file_name"
     if [ ! -d "$archive_directory" ]
@@ -51,10 +52,11 @@ function moveclips() {
         return
       fi
     fi
-    if [ ! -f "$archive_file_name" || $(stat -c%s "$archive_file_name") -ne $size ]
+    if [ ! -f "$archive_file_name" ] || [ $(stat -c%s "$archive_file_name") -ne $size ]
+    then
       log "Moving '$file_name'"
       outdir=$(dirname "$file_name")
-      if cp -p "$ROOT/$file_name" "$ARCHIVE_MOUNT/$outdir"
+      if cp --preserve=timestamps "$ROOT/$file_name" "$ARCHIVE_MOUNT/$outdir"
       then
         log "Moved '$file_name'"
         # TODO mark for deletion
@@ -65,6 +67,7 @@ function moveclips() {
       fi
     else
       log "'$file_name' already present in archive, skipping"
+      NUM_FILES_SKIPPED=$((NUM_FILES_SKIPPED + 1))
     fi
   done <<< $(cd "$ROOT"; find $PATTERN -type f -mmin +5)
 }
