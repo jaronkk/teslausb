@@ -269,8 +269,6 @@ function archive_teslacam_clips () {
     log "Checking saved folder count..."
   
     ensure_cam_file_is_mounted
-
-    fix_errors_in_cam_file
   
     DIR_COUNT=$(find "$CAM_MOUNT"/TeslaCam/SavedClips/* -maxdepth 0 -type d | wc -l)
     FILE_COUNT=$(find "$CAM_MOUNT"/TeslaCam/SavedClips/* -type f | wc -l)
@@ -323,23 +321,22 @@ function copy_music_files () {
   unmount_music_file
 }
 
-function archive_clips () {
-  log "Archiving..."
+function delete_archived_clips() {
+    ensure_cam_file_is_mounted
 
-  disconnect_usb_drives_from_host
+    # fix_errors_in_cam_file
 
+    # TODO delete stuff
+
+    unmount_cam_file
+}
+
+function copy_music() {
   if ! /root/bin/connect-archive.sh
   then
     log "Couldn't connect archive, skipping archive step"
-    connect_usb_drives_to_host
+    # connect_usb_drives_to_host
     return
-  fi
-
-  if archive_teslacam_clips
-  then
-    log "Finished archiving."
-  else
-    log "Archiving failed."
   fi
 
   if timeout 5 [ -d "$MUSIC_ARCHIVE_MOUNT" -a -d "$MUSIC_MOUNT" ]
@@ -356,8 +353,30 @@ function archive_clips () {
   fi
 
   /root/bin/disconnect-archive.sh
+}
 
-  connect_usb_drives_to_host
+function archive_clips () {
+  log "Archiving..."
+
+  # disconnect_usb_drives_from_host
+
+  if ! /root/bin/connect-archive.sh
+  then
+    log "Couldn't connect archive, skipping archive step"
+    # connect_usb_drives_to_host
+    return
+  fi
+
+  if archive_teslacam_clips
+  then
+    log "Finished archiving."
+  else
+    log "Archiving failed."
+  fi
+
+  /root/bin/disconnect-archive.sh
+
+  # connect_usb_drives_to_host
 }
 
 function truncate_log () {
