@@ -27,6 +27,30 @@ function connectionmonitor {
   done
 }
 
+function clipAlreadyArchived() {
+  file_name="$1"
+  size=$(stat -c%s "$ROOT/$file_name")
+  archive_file_name="$ARCHIVE_MOUNT/$file_name"
+  existing_size=$(sql_query "SELECT size FROM archived_files_pending_delete WHERE name = '$file_name'")
+  if  [[ $existing_size -eq $size ]] || [[ -f "$archive_file_name" && $(stat -c%s "$archive_file_name") -eq $size ]]
+  then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function markClipAsArchived() {
+  file_name="$1"
+  size=$(stat -c%s "$ROOT/$file_name")
+  existing_size=$(sql_query "SELECT size FROM archived_files_pending_delete WHERE name = '$file_name'")
+  if [[ $existing_size -ne $size ]]
+  then
+    log "Marking '$file_name' as archived with file size $size"
+    sql_query "INSERT OR REPLACE INTO archived_files_pending_delete (name, size, archived_at) VALUES ('$file_name', $size, CURRENT_TIMESTAMP);"
+  fi
+}
+
 function moveclips() {
   ROOT="$1"
   PATTERN="$2"
@@ -39,7 +63,6 @@ function moveclips() {
 
   while read file_name
   do
-    size=$(stat -c%s "$ROOT/$file_name")
     outdir=$(dirname "$file_name")
     archive_directory="$ARCHIVE_MOUNT/$outdir"
     archive_file_name="$ARCHIVE_MOUNT/$file_name"
@@ -52,22 +75,28 @@ function moveclips() {
         return
       fi
     fi
-    if [ ! -f "$archive_file_name" ] || [ $(stat -c%s "$archive_file_name") -ne $size ]
+    if [ -f "$ROOT/$file_name" ]
     then
-      log "Moving '$file_name'"
-      outdir=$(dirname "$file_name")
-      if cp --preserve=timestamps "$ROOT/$file_name" "$ARCHIVE_MOUNT/$outdir"
+      if ! clipAlreadyArchived "$file_name"
       then
-        log "Moved '$file_name'"
-        # TODO mark for deletion
-        NUM_FILES_MOVED=$((NUM_FILES_MOVED + 1))
+        log "Moving '$file_name'"
+        outdir=$(dirname "$file_name")
+        if cp --preserve=timestamps "$ROOT/$file_name" "$ARCHIVE_MOUNT/$outdir"
+        then
+          log "Moved '$file_name'"
+          markClipAsArchived "$file_name"
+          NUM_FILES_MOVED=$((NUM_FILES_MOVED + 1))
+        else
+          log "Failed to move '$file_name'"
+          NUM_FILES_FAILED=$((NUM_FILES_FAILED + 1))
+        fi
       else
-        log "Failed to move '$file_name'"
-        NUM_FILES_FAILED=$((NUM_FILES_FAILED + 1))
+        log "'$file_name' already present in archive, skipping"
+        markClipAsArchived "$file_name"
+        NUM_FILES_SKIPPED=$((NUM_FILES_SKIPPED + 1))
       fi
     else
-      log "'$file_name' already present in archive, skipping"
-      NUM_FILES_SKIPPED=$((NUM_FILES_SKIPPED + 1))
+      log "$file_name not found"
     fi
   done <<< $(cd "$ROOT"; find $PATTERN -type f -mmin +5)
 }

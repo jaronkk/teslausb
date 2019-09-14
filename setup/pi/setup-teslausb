@@ -395,6 +395,10 @@ function cmd_diagnose {
       echo "no archiveloop log found"
     fi
 
+    echo -e "===== archive database ====="
+    apt-get -y --force-yes install sqlite3
+    sqlite3 /mutable/archive.db "CREATE TABLE IF NOT EXISTS archived_files_pending_delete (name TEXT PRIMARY KEY, size UNSIGNED BIGINT, archived_at DATETIME);"
+
     echo -e "====== system log ======"
     if [ -x /bin/logread ]
     then

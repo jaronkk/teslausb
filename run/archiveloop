@@ -408,6 +408,10 @@ function doubleblink () {
   echo 1 > /sys/class/leds/led0/invert
 }
 
+function sql_query () {
+  sqlite3 /mutable/archive.db "$@"
+}
+
 function set_time () {
   log "Waiting for time to be set by ntpd..."
   for i in $(seq 1 10)
